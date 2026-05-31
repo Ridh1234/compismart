@@ -17,7 +17,7 @@ import {
   Users,
   XCircle,
 } from "lucide-react";
-import { analyzeVideos, streamChat } from "./lib/api";
+import { streamAnalyzeVideos, streamChat } from "./lib/api";
 import { formatDate, formatDuration } from "./lib/format";
 import type { AnalysisResponse, ChatMessage, Citation, VideoLabel, VideoMetadata } from "./lib/types";
 
@@ -25,10 +25,10 @@ const processingSteps = [
   "Validating video URLs",
   "Fetching YouTube metadata",
   "Fetching Instagram metadata",
-  "Extracting transcripts",
+  "Extracting YouTube transcript",
+  "Extracting Instagram transcript",
   "Calculating engagement",
-  "Generating embeddings",
-  "Building knowledge base",
+  "Building retrieval index",
   "Preparing workspace",
 ];
 
@@ -68,6 +68,7 @@ export default function App() {
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
   const [processingState, setProcessingState] = useState<ProcessingState>("idle");
   const [activeStep, setActiveStep] = useState(0);
+  const [processingMessage, setProcessingMessage] = useState("Waiting for backend progress");
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
@@ -82,14 +83,6 @@ export default function App() {
       navigate("/", true);
     }
   }, [analysis, route]);
-
-  useEffect(() => {
-    if (processingState !== "processing") return;
-    const timer = window.setInterval(() => {
-      setActiveStep((step) => Math.min(step + 1, processingSteps.length - 2));
-    }, 700);
-    return () => window.clearInterval(timer);
-  }, [processingState]);
 
   const navigate = (path: string, replace = false) => {
     if (window.location.pathname === path) {
@@ -121,13 +114,18 @@ export default function App() {
     if (!validate()) return;
     setProcessingState("processing");
     setActiveStep(0);
+    setProcessingMessage("Starting backend analysis");
     setAnalysis(null);
     setMessages([]);
 
     try {
-      const result = await analyzeVideos(videoAUrl.trim(), videoBUrl.trim());
+      const result = await streamAnalyzeVideos(videoAUrl.trim(), videoBUrl.trim(), (progress) => {
+        setProcessingMessage(progress.message);
+        setActiveStep(progress.status === "done" ? Math.min(progress.step_index + 1, processingSteps.length) : progress.step_index);
+      });
       setAnalysis(result);
       setActiveStep(processingSteps.length);
+      setProcessingMessage("Workspace ready");
       window.setTimeout(() => {
         setProcessingState("idle");
         navigate("/workspace");
@@ -198,6 +196,7 @@ export default function App() {
         errors={errors}
         processingState={processingState}
         activeStep={activeStep}
+        processingMessage={processingMessage}
         globalError={globalError}
         onAnalyze={handleAnalyze}
       />
@@ -225,6 +224,7 @@ function LandingPage(props: {
   errors: FormErrors;
   processingState: ProcessingState;
   activeStep: number;
+  processingMessage: string;
   globalError: string | null;
   onAnalyze: () => void;
 }) {
@@ -258,6 +258,7 @@ function LandingPage(props: {
           {isProcessing || isFailed ? (
             <ProcessingCard
               activeStep={props.activeStep}
+              message={props.processingMessage}
               failed={isFailed}
               error={props.globalError}
               onRetry={props.onAnalyze}
@@ -355,14 +356,14 @@ function UrlInput(props: {
   );
 }
 
-function ProcessingCard(props: { activeStep: number; failed: boolean; error: string | null; onRetry: () => void }) {
+function ProcessingCard(props: { activeStep: number; message: string; failed: boolean; error: string | null; onRetry: () => void }) {
   return (
     <div>
       <div className="processing-header">
         <span>{props.failed ? "Analysis request failed" : "Analyzing your videos..."}</span>
         {!props.failed && <Loader2 className="spin-icon" aria-hidden="true" />}
       </div>
-      <p className="processing-note">Progress is estimated while the backend runs the analysis request.</p>
+      <p className="processing-note">{props.failed ? "The backend returned an error before analysis completed." : props.message}</p>
       <div className="processing-list">
         {processingSteps.map((step, index) => {
           const done = index < props.activeStep || props.activeStep >= processingSteps.length;
@@ -701,13 +702,173 @@ function ChatBubble({ message }: { message: ChatMessage }) {
 }
 
 function MarkdownLite({ content }: { content: string }) {
+  const blocks = toMarkdownBlocks(content);
+
   return (
     <div className="markdown-lite">
-      {content.split("\n").map((line, index) => (
-        <p key={`${line}-${index}`}>{line || "\u00A0"}</p>
-      ))}
+      {blocks.map((block, index) => {
+        if (block.type === "spacer") {
+          return <div key={`spacer-${index}`} className="markdown-spacer" aria-hidden="true" />;
+        }
+        if (block.type === "heading") {
+          return <h3 key={`${block.text}-${index}`}>{renderInlineMarkdown(block.text)}</h3>;
+        }
+        if (block.type === "list") {
+          return (
+            <ul key={`list-${index}`}>
+              {block.items.map((item, itemIndex) => (
+                <li key={`${item}-${itemIndex}`}>{renderInlineMarkdown(item)}</li>
+              ))}
+            </ul>
+          );
+        }
+        if (block.type === "table") {
+          return (
+            <div key={`table-${index}`} className="markdown-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    {block.headers.map((header, headerIndex) => (
+                      <th key={`${header}-${headerIndex}`}>{renderInlineMarkdown(header)}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {block.rows.map((row, rowIndex) => (
+                    <tr key={`row-${rowIndex}`}>
+                      {row.map((cell, cellIndex) => (
+                        <td key={`${cell}-${cellIndex}`}>{renderInlineMarkdown(cell)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        }
+        return <p key={`${block.text}-${index}`}>{renderInlineMarkdown(block.text)}</p>;
+      })}
     </div>
   );
+}
+
+type MarkdownBlock =
+  | { type: "heading"; text: string }
+  | { type: "paragraph"; text: string }
+  | { type: "list"; items: string[] }
+  | { type: "table"; headers: string[]; rows: string[][] }
+  | { type: "spacer" };
+
+function toMarkdownBlocks(content: string): MarkdownBlock[] {
+  const blocks: MarkdownBlock[] = [];
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  let pendingList: string[] = [];
+  let tableLines: string[] = [];
+
+  const flushList = () => {
+    if (pendingList.length > 0) {
+      blocks.push({ type: "list", items: pendingList });
+      pendingList = [];
+    }
+  };
+
+  const flushTable = () => {
+    if (tableLines.length > 0) {
+      const table = parseMarkdownTable(tableLines);
+      if (table) {
+        blocks.push(table);
+      } else {
+        blocks.push(...tableLines.map((text) => ({ type: "paragraph" as const, text })));
+      }
+      tableLines = [];
+    }
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      flushList();
+      flushTable();
+      if (blocks.length > 0 && blocks[blocks.length - 1].type !== "spacer") {
+        blocks.push({ type: "spacer" });
+      }
+      continue;
+    }
+
+    if (isTableLine(line)) {
+      flushList();
+      tableLines.push(line);
+      continue;
+    }
+
+    const bullet = line.match(/^[-*]\s+(.*)$/);
+    if (bullet) {
+      flushTable();
+      pendingList.push(bullet[1]);
+      continue;
+    }
+
+    flushTable();
+    flushList();
+    const heading = line.match(/^\*\*(.+?)\*\*:?$/);
+    blocks.push(heading ? { type: "heading", text: heading[1] } : { type: "paragraph", text: line });
+  }
+
+  flushTable();
+  flushList();
+  return blocks.filter((block, index, list) => block.type !== "spacer" || (index > 0 && index < list.length - 1));
+}
+
+function renderInlineMarkdown(text: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const pattern = /\*\*(.+?)\*\*/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index));
+    }
+    nodes.push(<strong key={`${match[1]}-${match.index}`}>{match[1]}</strong>);
+    lastIndex = pattern.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
+  return nodes;
+}
+
+function isTableLine(line: string): boolean {
+  return line.startsWith("|") && line.endsWith("|") && line.split("|").length >= 4;
+}
+
+function parseMarkdownTable(lines: string[]): MarkdownBlock | null {
+  const rows = lines.map(splitTableRow).filter((row) => row.length > 1);
+  const separatorIndex = rows.findIndex(isTableSeparator);
+  if (separatorIndex <= 0) return null;
+
+  const headers = rows[separatorIndex - 1];
+  const bodyRows = rows.slice(separatorIndex + 1).filter((row) => !isTableSeparator(row));
+  if (headers.length === 0 || bodyRows.length === 0) return null;
+
+  return {
+    type: "table",
+    headers,
+    rows: bodyRows.map((row) => headers.map((_, index) => row[index] ?? "")),
+  };
+}
+
+function splitTableRow(line: string): string[] {
+  return line
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+}
+
+function isTableSeparator(row: string[]): boolean {
+  return row.every((cell) => /^:?-{3,}:?$/.test(cell));
 }
 
 function StreamingIndicator() {

@@ -1090,8 +1090,79 @@ textarea:focus-visible {
   line-height: 1.65;
 }
 
+.markdown-lite h3 {
+  margin: 18px 0 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.markdown-lite h3:first-child {
+  margin-top: 0;
+}
+
 .markdown-lite p {
   margin: 0 0 10px;
+}
+
+.markdown-lite ul {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding-left: 18px;
+}
+
+.markdown-lite li {
+  padding-left: 4px;
+}
+
+.markdown-lite strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.markdown-table-wrap {
+  max-width: 100%;
+  margin: 10px 0 14px;
+  overflow-x: auto;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+}
+
+.markdown-lite table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.markdown-lite th,
+.markdown-lite td {
+  padding: 10px 12px;
+  border-right: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown-lite th:last-child,
+.markdown-lite td:last-child {
+  border-right: 0;
+}
+
+.markdown-lite tr:last-child td {
+  border-bottom: 0;
+}
+
+.markdown-lite th {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.markdown-spacer {
+  height: 4px;
 }
 
 .markdown-lite p:last-child {

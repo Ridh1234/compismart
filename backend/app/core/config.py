@@ -13,17 +13,20 @@ class Settings(BaseSettings):
     cohere_api_key: str | None = None
     chroma_persist_dir: str = "./.chroma"
 
-    cohere_chat_model: str = "command-r-plus"
+    cohere_chat_model: str = "command-a-plus-05-2026"
     cohere_embed_model: str = "embed-english-v3.0"
-    whisper_model_size: str = "tiny"
+    whisper_model_size: str = "small"
     whisper_model_dir: str = "./.models/whisper"
+    whisper_language: str | None = "hi"
+    whisper_initial_prompt: str | None = "This audio may contain Hindi, Hinglish, or English. Transcribe the spoken words accurately; do not translate."
     media_download_dir: str = "/tmp/compismart_media"
     ytdlp_cookies_path: str | None = None
     environment: str = "development"
     log_level: str = "INFO"
 
-    apify_instagram_actor: str = "hpix/ig-reels-scraper"
-    apify_instagram_fallback_actor: str = "apify/instagram-scraper"
+    apify_instagram_actor: str = "apify/instagram-scraper"
+    apify_instagram_fallback_actor: str | None = None
+    apify_youtube_video_actor: str = "streamers/youtube-scraper"
     apify_youtube_shorts_actor: str = "streamers/youtube-shorts-scraper"
     apify_youtube_shorts_max_results: int = 50
     frontend_origin: str = "http://localhost:5173"

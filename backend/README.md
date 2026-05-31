@@ -4,10 +4,10 @@ FastAPI service for dynamic short-form video ingestion, transcript chunking, vec
 
 ## Services
 
-- `YouTubeService`: fetches official YouTube metadata from the YouTube Data API.
+- `YouTubeService`: fetches official YouTube metadata from the YouTube Data API, then uses Apify exact-video enrichment for subtitles when configured.
 - `InstagramService`: fetches public Reel metadata through Apify.
 - `TranscriptService`: reads YouTube caption tracks and uses scraped Instagram text when available.
-- `TranscriptService`: falls back to local Whisper `tiny` transcription from downloaded media when captions are unavailable.
+- `TranscriptService`: falls back to local Whisper `small` transcription from downloaded media when captions are unavailable.
 - `ChunkingService`: chunks transcripts with LangChain text splitting.
 - `EmbeddingService`: embeds with Cohere when configured; falls back to local lexical vectors for development retrieval only.
 - `VectorStoreService`: stores chunks in ChromaDB and falls back to in-memory lexical retrieval if Chroma is unavailable.
@@ -23,3 +23,4 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 Set `YOUTUBE_API_KEY`, `APIFY_TOKEN`, and `COHERE_API_KEY` in `.env` for the complete dynamic pipeline.
+Set `YTDLP_COOKIES_PATH` to an exported YouTube cookies file if yt-dlp needs authenticated media fallback for Shorts that do not expose captions through YouTube or Apify.

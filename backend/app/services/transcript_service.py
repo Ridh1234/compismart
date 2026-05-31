@@ -119,7 +119,7 @@ class TranscriptService:
             return TranscriptBundle(text=text, source_type="official_caption", segments=segments)
         except Exception as exc:
             logger.warning("ytdlp_subtitle_transcript_failed url=%s error=%s", url, exc)
-            return TranscriptBundle(source_type="unavailable", warning=f"yt-dlp subtitle extraction failed: {exc}")
+            return TranscriptBundle(source_type="unavailable", warning=_ytdlp_failure_warning("yt-dlp subtitle extraction failed", exc))
 
     def _get_ytdlp_subtitle_url(self, url: str) -> str | None:
         from yt_dlp import YoutubeDL
@@ -200,7 +200,21 @@ class TranscriptService:
         import whisper
 
         model = whisper.load_model(settings.whisper_model_size, download_root=settings.whisper_model_dir)
-        return model.transcribe(media_path, fp16=False, verbose=False)
+        options = {
+            "fp16": False,
+            "verbose": False,
+            "task": "transcribe",
+        }
+        if settings.whisper_language:
+            options["language"] = settings.whisper_language
+        if settings.whisper_initial_prompt:
+            options["initial_prompt"] = settings.whisper_initial_prompt
+        logger.info(
+            "whisper_model_loaded model=%s language=%s",
+            settings.whisper_model_size,
+            settings.whisper_language or "auto",
+        )
+        return model.transcribe(media_path, **options)
 
     async def _download_media(self, video: VideoMetadata) -> str | None:
         self._last_media_error = None
@@ -260,7 +274,7 @@ class TranscriptService:
                 return str(candidates[0]) if candidates else None
         except Exception as exc:
             logger.warning("ytdlp_media_download_failed label=%s url=%s error=%s", label, url, exc)
-            self._last_media_error = f"yt-dlp media download failed: {exc}"
+            self._last_media_error = _ytdlp_failure_warning("yt-dlp media download failed", exc)
             return None
 
     def _is_meaningful_transcript(self, text: str) -> bool:
@@ -383,3 +397,10 @@ def _clean_caption_text(value: str) -> str:
     text = text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
     text = re.sub(r"\s+", " ", text)
     return text.strip()
+
+
+def _ytdlp_failure_warning(prefix: str, exc: Exception) -> str:
+    message = str(exc)
+    if "Sign in to confirm" in message and "not a bot" in message and not settings.ytdlp_cookies_path:
+        return f"{prefix}: YouTube blocked unauthenticated yt-dlp. Set YTDLP_COOKIES_PATH to a valid exported cookies file to enable media fallback."
+    return f"{prefix}: {message}"

@@ -35,6 +35,16 @@ export type AnalysisResponse = {
   warnings: string[];
 };
 
+export type AnalysisProgress = {
+  phase: string;
+  status: "started" | "done";
+  step_index: number;
+  message: string;
+  source?: TranscriptBundle["source_type"];
+  warnings?: number;
+  chunks?: number;
+};
+
 export type Citation = {
   video_label: VideoLabel;
   chunk_id: string;
