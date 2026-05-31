@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     apify_youtube_shorts_actor: str = "streamers/youtube-shorts-scraper"
     apify_youtube_shorts_max_results: int = 50
     frontend_origin: str = "http://localhost:5173"
+    cors_origin_regex: str | None = r"https://.*\.vercel\.app"
     cors_extra_origins: str = Field(default="")
 
     @property
